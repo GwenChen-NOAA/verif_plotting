@@ -1,5 +1,14 @@
-import pickle
+#!/usr/bin/env python3
+# =============================================================================
+#
+# NAME: plot_util.py
+# CONTRIBUTOR(S): Marcel Caron, marcel.caron@noaa.gov, NOAA/NWS/NCEP/EMC-VPPPGB
+# PURPOSE: Plotting tools for CAM plotting scripts
+#
+# =============================================================================
+
 import os
+import sys
 import datetime as datetime
 import time
 import numpy as np
@@ -9,6 +18,16 @@ warnings.filterwarnings('ignore')
 """!@namespace plot_util
    @brief Provides utility functions for METplus plotting use case
 """
+
+def get_memory_usage():
+    total_memory, used_memory, free_memory = map(
+        int, 
+        os.popen('free -t -m').readlines()[-1].split()[1:]
+    )
+    return ' '.join((
+        "RAM memory % used:", 
+        str(round((used_memory/total_memory) * 100, 2))
+    ))
 
 def get_date_arrays(date_type, date_beg, date_end,
                     fcst_valid_hour, fcst_init_hour,
@@ -269,7 +288,8 @@ def get_stat_file_base_columns(met_version):
       ]
    return stat_file_base_columns
 
-def get_stat_file_line_type_columns(logger, met_version, line_type):
+def get_stat_file_line_type_columns(logger, met_version, line_type, 
+                                    stat_file_base_columns, fpath):
    """! Get the MET .stat file columns for line type based on 
       version number
          Args:
@@ -293,24 +313,53 @@ def get_stat_file_line_type_columns(logger, met_version, line_type):
             'TOTAL', 'FABAR', 'OABAR', 'FOABAR', 'FFABAR', 'OOABAR', 'MAE'
          ]
    elif line_type == 'VL1L2':
-      if met_version <= 6.1:
+      if met_version >= 12.0:
          stat_file_line_type_columns = [
             'TOTAL', 'UFBAR', 'VFBAR', 'UOBAR', 'VOBAR', 'UVFOBAR',
-            'UVFFBAR', 'UVOOBAR'
+            'UVFFBAR', 'UVOOBAR', 'F_SPEED_BAR', 'O_SPEED_BAR', 'DIR_ME',
+            'DIR_MAE', 'DIR_MSE'
          ]
       elif met_version >= 7.0:
          stat_file_line_type_columns = [
             'TOTAL', 'UFBAR', 'VFBAR', 'UOBAR', 'VOBAR', 'UVFOBAR',
             'UVFFBAR', 'UVOOBAR', 'F_SPEED_BAR', 'O_SPEED_BAR'
          ]
+      elif met_version <= 6.1:
+         stat_file_line_type_columns = [
+            'TOTAL', 'UFBAR', 'VFBAR', 'UOBAR', 'VOBAR', 'UVFOBAR',
+            'UVFFBAR', 'UVOOBAR'
+         ]
    elif line_type == 'VAL1L2':
-      if met_version >= 6.0:
+      if met_version >= 11.0:
+         stat_file_line_type_columns = [
+            'TOTAL', 'UFABAR', 'VFABAR', 'UOABAR', 'VOABAR', 'UVFOABAR', 
+            'UVFFABAR', 'UVOOABAR', 'FA_SPEED_BAR', 'OA_SPEED_BAR'
+         ]
+      elif met_version >= 6.0:
          stat_file_line_type_columns = [
             'TOTAL', 'UFABAR', 'VFABAR', 'UOABAR', 'VOABAR', 'UVFOABAR', 
             'UVFFABAR', 'UVOOABAR'
          ]
    elif line_type == 'VCNT':
-      if met_version >= 7.0:
+      if met_version >= 11.0:
+         stat_file_line_type_columns = [
+            'TOTAL', 'FBAR', 'FBAR_BCL', 'FBAR_BCU', 'OBAR', 'OBAR_BCL', 
+            'OBAR_BCU', 'FS_RMS', 'FS_RMS_BCL', 'FS_RMS_BCU', 'OS_RMS',
+            'OS_RMS_BCL', 'OS_RMS_BCU', 'MSVE', 'MSVE_BCL', 'MSVE_BCU',
+            'RMSVE', 'RMSVE_BCL', 'RMSVE_BCU', 'FSTDEV', 'FSTDEV_BCL',
+            'FSTDEV_BCU', 'OSTDEV', 'OSTDEV_BCL', 'OSTDEV_BCU', 'FDIR', 
+            'FDIR_BCL', 'FDIR_BCU', 'ODIR', 'ODIR_BCL', 'ODIR_BCU', 
+            'FBAR_SPEED', 'FBAR_SPEED_BCL', 'FBAR_SPEED_BCU', 'OBAR_SPEED', 
+            'OBAR_SPEED_BCL', 'OBAR_SPEED_BCU', 'VDIFF_SPEED', 
+            'VDIFF_SPEED_BCL', 'VDIFF_SPEED_BCU', 'VDIFF_DIR',
+            'VDIFF_DIR_BCL', 'VDIFF_DIR_BCU', 'SPEED_ERR', 'SPEED_ERR_BCL',
+            'SPEED_ERR_BCU', 'SPEED_ABSERR', 'SPEED_ABSERR_BCL',
+            'SPEED_ABSERR_BCU', 'DIR_ERR', 'DIR_ERR_BCL', 'DIR_ERR_BCU',
+            'DIR_ABSERR', 'DIR_ABSERR_BCL', 'DIR_ABSERR_BCU', 'ANOM_CORR',
+            'ANOM_CORR_NCL', 'ANOM_CORR_NCU', 'ANOM_CORR_BCL', 'ANOM_CORR_BCU',
+            'ANOM_CORR_UNCNT', 'ANOM_CORR_UNCNTR_BCL', 'ANOM_CORR_UNCNTR_BCU'
+         ]
+      elif met_version >= 7.0:
          stat_file_line_type_columns = [
             'TOTAL', 'FBAR', 'FBAR_NCL', 'FBAR_NCU', 'OBAR', 'OBAR_NCL', 
             'OBAR_NCU', 'FS_RMS', 'FS_RMS_NCL', 'FS_RMS_NCU', 'OS_RMS',
@@ -327,21 +376,109 @@ def get_stat_file_line_type_columns(logger, met_version, line_type):
             'DIR_ABSERR', 'DIR_ABSERR_NCL', 'DIR_ABSERR_NCU'
          ]
       else:
-         logger.error("VCNT is not a valid LINE_TYPE in METV"+met_version)
+         logger.error("FATAL ERROR: VCNT is not a valid LINE_TYPE in METV"+met_version)
          exit(1)
    elif line_type == 'CTC':
-      if met_version >= 6.0:
+      if met_version >= 11.0:
          stat_file_line_type_columns = [
+            'TOTAL', 'FY_OY', 'FY_ON', 'FN_OY', 'FN_ON', 'EC_VALUE'
+         ]
+      elif met_version >= 6.0:
+          stat_file_line_type_columns = [
+            'TOTAL', 'FY_OY', 'FY_ON', 'FN_OY', 'FN_ON'
+         ]
+   elif line_type == 'NBRCTC':
+       if met_version >= 6.0:
+          stat_file_line_type_columns = [
             'TOTAL', 'FY_OY', 'FY_ON', 'FN_OY', 'FN_ON'
          ]
    elif line_type == 'NBRCNT':
       if met_version >= 6.0:
          stat_file_line_type_columns = [
             'TOTAL', 'FBS', 'FBS_BCL', 'FBS_BCU', 'FSS', 'FSS_BCL', 'FSS_BCU',
-            'AFSS', 'AFSS_BCL', 'AFSS_BCU', 'UFSS', 'UFSS_BCL', 'UFSS_BCU', 
-            'F_RATE', 'F_RATE_BCL', 'F_RATE_BCU', 
+            'AFSS', 'AFSS_BCL', 'AFSS_BCU', 'UFSS', 'UFSS_BCL', 'UFSS_BCU',
+            'F_RATE', 'F_RATE_BCL', 'F_RATE_BCU',
             'O_RATE', 'O_RATE_BCL', 'O_RATE_BCU'
          ]
+   elif line_type == 'ECNT':
+      if met_version >= 12.0:
+         stat_file_line_type_columns = [
+             'TOTAL', 'N_ENS', 'CRPS', 'CRPSS', 'IGN', 'ME', 'RMSE', 'SPREAD',
+             'ME_OERR', 'RMSE_OERR', 'SPREAD_OERR', 'SPREAD_PLUS_OERR',
+             'CRPSCL', 'CRPS_EMP', 'CRPSCL_EMP', 'CRPSS_EMP',
+             'CRPS_EMP_FAIR', 'SPREAD_MD', 'MAE', 'MAE_OERR', 'BIAS_RATIO',
+             'N_GE_OBS', 'ME_GE_OBS', 'N_LT_OBS', 'ME_LT_OBS', 'IGN_CONV_OERR',
+             'IGN_CORR_OERR'
+         ] 
+      elif met_version >= 11.0:
+         stat_file_line_type_columns = [
+             'TOTAL', 'N_ENS', 'CRPS', 'CRPSS', 'IGN', 'ME', 'RMSE', 'SPREAD',
+             'ME_OERR', 'RMSE_OERR', 'SPREAD_OERR', 'SPREAD_PLUS_OERR',
+             'CRPSCL', 'CRPS_EMP', 'CRPSCL_EMP', 'CRPSS_EMP',
+             'CRPS_EMP_FAIR', 'SPREAD_MD', 'MAE', 'MAE_OERR', 'BIAS_RATIO',
+             'N_GE_OBS', 'ME_GE_OBS', 'N_LT_OBS', 'ME_LT_OBS'
+         ] 
+      else:
+         stat_file_line_type_columns = [
+            'TOTAL', 'N_ENS', 'CRPS', 'CRPSS', 'IGN', 'ME', 'RMSE', 'SPREAD',
+            'ME_OERR', 'RMSE_OERR', 'SPREAD_OERR', 'SPREAD_PLUS_OERR',
+            'CRPSCL', 'CRPS_EMP', 'CRPSCL_EMP', 'CRPSS_EMP'
+         ]
+   elif line_type == 'PSTD':
+      if met_version >= 6.0:
+         stat_file_line_type_columns = [
+            'TOTAL', 'N_THRESH', 'BASER', 'BASER_NCL', 'BASER_NCU', 'RELIABILITY',
+            'RESOLUTION', 'UNCERTAINTY', 'ROC_AUC', 'BRIER', 'BRIER_NCL', 'BRIER_NCU',
+            'BRIERCL', 'BRIERCL_NCL', 'BRIERCL_NCU', 'BSS', 'BSS_SMPL',
+            'THRESH_1', 'THRESH_2', 'THRESH_3', 'THRESH_4', 'THRESH_5', 'THRESH_6',
+            'THRESH_7', 'THRESH_8', 'THRESH_9', 'THRESH_10', 'THRESH_11'
+         ]
+   elif line_type == 'MCTC':
+      if met_version >= 11.0:
+         # need to pull in stat_file_og_columns and fname as args!
+         stat_file_line_type_columns_start = ['TOTAL', 'N_CAT']
+         stat_file_all_columns_start = np.concatenate((
+            stat_file_base_columns, stat_file_line_type_columns_start
+         ))
+         df_read_tmp = pd.read_csv(
+            fpath, delim_whitespace=True, header=None, skiprows=1, dtype=str
+         )
+         categs = np.arange(int(
+            df_read_tmp[
+                np.argwhere(stat_file_all_columns_start=='N_CAT')[0]
+            ].max()
+         ))
+         variable_columns = []
+         for Fcateg in categs:
+            for Ocateg in categs:
+               variable_columns.append(f'F{Fcateg}_O{Ocateg}')
+         stat_file_line_type_columns = np.concatenate((
+            stat_file_line_type_columns_start,
+            variable_columns,
+            ['EC_VALUE']
+         ))
+      elif met_version >= 6.0:
+         # need to pull in stat_file_og_columns and fname as args!
+         stat_file_line_type_columns_start = ['TOTAL', 'N_CAT']
+         stat_file_all_columns_start = np.concatenate((
+            stat_file_og_columns, stat_file_line_type_columns_start
+         ))
+         df_read_tmp = pd.read_csv(
+            fname, delim_whitespace=True, header=None, skiprows=1, dtype=str
+         )
+         categs = np.arange(int(
+            df_read_tmp[
+                np.argwhere(stat_file_all_columns_start=='N_CAT')[0]
+            ].max()
+         ))
+         variable_columns = []
+         for Fcateg in categs:
+            for Ocateg in categs:
+               variable_columns.append(f'F{Fcat}_O{Ocat}')
+         stat_file_line_type_columns = np.concatenate((
+            stat_file_line_type_columns_start,
+            variable_columns
+         ))
    return stat_file_line_type_columns
 
 def get_clevels(data, spacing):
@@ -416,7 +553,7 @@ def calculate_average(logger, average_method, stat, model_dataframe,
       for l in range(len(avg_array[:,0])):
          average_array[l] = avg_array[l]
    else:
-      logger.error("Invalid entry for MEAN_METHOD, "
+      logger.error("FATAL ERROR: Invalid entry for MEAN_METHOD, "
                    +"use MEAN, MEDIAN, or AGGREGATION")
       exit(1)
    return average_array
@@ -525,7 +662,7 @@ def calculate_ci(logger, ci_method, modelB_values, modelA_values, total_days,
       intvl = 1.96*scores_diff_std
       
    else:
-      logger.error("Invalid entry for MAKE_CI_METHOD, "
+      logger.error("FATAL ERROR: Invalid entry for MAKE_CI_METHOD, "
                    +"use EMC, EMC_MONTE_CARLO")
       exit(1)
    return intvl
@@ -539,8 +676,8 @@ def get_stat_plot_name(logger, stat):
          stat_plot_name - string of the formal statistic
                           name being plotted
    """
-   if stat == 'bias':
-      stat_plot_name = 'Bias'
+   if stat == 'me':
+      stat_plot_name = 'Mean Error (i.e., Bias)'
    elif stat == 'rmse':
       stat_plot_name = 'Root Mean Square Error'
    elif stat == 'bcrmse':
@@ -558,11 +695,11 @@ def get_stat_plot_name(logger, stat):
    elif stat == 'acc':
       stat_plot_name = 'Anomaly Correlation Coefficient'
    elif stat == 'fbar':
-      stat_plot_name = 'Forecast Averages'
+      stat_plot_name = 'Forecast Mean'
    elif stat == 'obar':
-      stat_plot_name = 'Observation Averages'
+      stat_plot_name = 'Observation Mean'
    elif stat == 'fbar_obar':
-      stat_plot_name = 'Forecast and Observation Averages'
+      stat_plot_name = 'Forecast and Observation Mean'
    elif stat == 'fss':
       stat_plot_name = 'Fractions Skill Score'
    elif stat == 'afss':
@@ -635,13 +772,31 @@ def get_stat_plot_name(logger, stat):
       stat_plot_name = 'Peirce Skill Score'
    elif stat == 'hss':
       stat_plot_name = 'Heidke Skill Score'
+   elif stat == 'crps':
+      stat_plot_name = 'CRPS'
+   elif stat == 'crpss':
+      stat_plot_name = 'CRPSS'
+   elif stat == 'spread':
+      stat_plot_name = 'Spread'
+   elif stat == 'me':
+      stat_plot_name = 'Mean Error (Bias)'
+   elif stat == 'mae':
+      stat_plot_name = 'Mean Absolute Error'
+   elif stat == 'bs':
+      stat_plot_name = 'Brier Score'
+   elif stat == 'roc_area':
+      stat_plot_name = 'ROC Area'
+   elif stat == 'bss':
+      stat_plot_name = 'Brier Skill Score'
+   elif stat == 'bss_smpl':
+      stat_plot_name = 'Brier Skill Score'
    else:
-      logger.error(stat+" is not a valid option")
+      logger.error("FATAL ERROR: "+stat+" is not a valid option")
       exit(1)
    return stat_plot_name
 
 def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level, 
-                           bs_min_samp):
+                           bs_min_samp, conversion):
    """! Calculate the upper and lower bound bootstrap statistic from the 
         data from the read in MET .stat file(s)
 
@@ -681,6 +836,10 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
       else:
          stat_values = model_data.loc[:]['TOTAL']
    else:
+      if np.any(conversion):
+         bool_convert = True
+      else:
+         bool_convert = False
       if all(elem in model_data_columns for elem in
             ['FBAR', 'OBAR', 'MAE']):
          line_type = 'SL1L2'
@@ -690,6 +849,28 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          fobar = model_data.loc[:]['FOBAR']
          ffbar = model_data.loc[:]['FFBAR']
          oobar = model_data.loc[:]['OOBAR']
+         if bool_convert:
+             coef, const = conversion
+             fbar_og = fbar
+             obar_og = obar
+             fbar = coef*fbar_og+const
+             obar = coef*obar_og+const
+             fobar = (
+                np.power(coef, 2)*fobar 
+                + coef*const*fbar_og 
+                + coef*const*obar_og
+                + np.power(const, 2)
+             )
+             ffbar = (
+                np.power(coef, 2)*ffbar 
+                + 2.*coef*const*fbar_og 
+                + np.power(const, 2)
+             )
+             oobar = (
+                np.power(coef, 2)*oobar 
+                + 2.*coef*const*obar_og
+                + np.power(const, 2)
+             )
       elif all(elem in model_data_columns for elem in 
             ['FABAR', 'OABAR', 'MAE']):
          line_type = 'SAL1L2'
@@ -699,6 +880,19 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          foabar = model_data.loc[:]['FOABAR']
          ffabar = model_data.loc[:]['FFABAR']
          ooabar = model_data.loc[:]['OOABAR']
+         if bool_convert:
+             coef, const = conversion
+             fabar = coef*fabar
+             oabar = coef*oabar
+             foabar = (
+                np.power(coef, 2)*foabar 
+             )
+             ffabar = (
+                np.power(coef, 2)*ffabar 
+             )
+             ooabar = (
+                np.power(coef, 2)*ooabar 
+             )
       elif all(elem in model_data_columns for elem in
             ['UFBAR', 'VFBAR']):
          line_type = 'VL1L2'
@@ -710,6 +904,31 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          uvfobar = model_data.loc[:]['UVFOBAR']
          uvffbar = model_data.loc[:]['UVFFBAR']
          uvoobar = model_data.loc[:]['UVOOBAR']
+         if bool_convert:
+             coef, const = conversion
+             ufbar_og = ufbar
+             vfbar_og = vfbar
+             uobar_og = uobar
+             vobar_og = vobar
+             ufbar = coef*ufbar_og+const
+             vfbar = coef*vfbar_og+const
+             uobar = coef*uobar_og+const
+             vobar = coef*vobar_og+const
+             uvfobar = (
+                np.power(coef, 2)*uvfobar 
+                + coef*const*(ufbar_og + uobar_og + vfbar_og + vobar_og) 
+                + np.power(const, 2)
+             )
+             uvffbar = (
+                np.power(coef, 2)*uvffbar 
+                + 2.*coef*const*(ufbar_og + vfbar_og) 
+                + np.power(const, 2)
+             )
+             uvoobar = (
+                np.power(coef, 2)*uvoobar 
+                + 2.*coef*const*(uobar_og + vobar_og) 
+                + np.power(const, 2)
+             )
       elif all(elem in model_data_columns for elem in 
             ['UFABAR', 'VFABAR']):
          line_type = 'VAL1L2'
@@ -721,6 +940,21 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          uvfoabar = model_data.loc[:]['UVFOABAR']
          uvffabar = model_data.loc[:]['UVFFABAR']
          uvooabar = model_data.loc[:]['UVOOABAR']
+         if bool_convert:
+             coef, const = conversion
+             ufabar = coef*ufabar
+             vfabar = coef*vfabar
+             uoabar = coef*uoabar
+             voabar = coef*voabar
+             uvfoabar = (
+                np.power(coef, 2)*uvfoabar 
+             )
+             uvffabar = (
+                np.power(coef, 2)*uvffabar 
+             )
+             uvooabar = (
+                np.power(coef, 2)*uvooabar 
+             )
       elif all(elem in model_data_columns for elem in
             ['VDIFF_SPEED', 'VDIFF_DIR']):
          line_type = 'VCNT'
@@ -741,6 +975,11 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          vdiff_dir = model_data.loc[:]['VDIFF_DIR']
          speed_err = model_data.loc[:]['SPEED_ERR']
          dir_err = model_data.loc[:]['DIR_ERR']
+         if bool_convert:
+            logger.error(
+               f"FATAL ERROR: Cannot convert columns for line_type \"{line_type}\""
+            )
+            exit(1) 
       elif all(elem in model_data_columns for elem in
             ['FY_OY', 'FN_ON']):
          line_type = 'CTC'
@@ -750,6 +989,35 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          fn_oy = model_data.loc[:]['FN_OY']
          fn_on = model_data.loc[:]['FN_ON']
       elif all(elem in model_data_columns for elem in 
+            ['N_CAT', 'F0_O0']):
+         line_type = 'MCTC'
+         total = model_data.loc[:]['TOTAL']
+         counts = model_data.loc[:]['COUNTS']
+         n_cat = model_data.loc[:]['N_CAT']/counts
+         i_val = model_data.loc[:]['i_vals']/counts
+         fy_oy_cols = get_MCTC_cols_for_sum(n_cat, i_val, 'fy_oy')
+         fy_on_cols = get_MCTC_cols_for_sum(n_cat, i_val, 'fy_on')
+         fn_oy_cols = get_MCTC_cols_for_sum(n_cat, i_val, 'fn_oy')
+         fy_oy = np.array(
+            [
+                model_data.reset_index().loc[i, fy_oy_cols[i]].sum() 
+                for i in model_data.reset_index().index
+            ]
+         )
+         fy_on = np.array(
+            [
+                model_data.reset_index().loc[i, fy_on_cols[i]].sum() 
+                for i in model_data.reset_index.index
+            ]
+         )
+         fn_oy = np.array(
+            [
+                model_data.reset_index().loc[i, fn_oy_cols[i]].sum() 
+                for i in model_data.reset_index().index
+            ]
+         )
+         fn_on = total - fy_oy - fy_on - fn_oy
+      elif all(elem in model_data_columns for elem in
             ['FBS','FSS','AFSS','UFSS','F_RATE','O_RATE']):
          line_type = 'NBRCNT'
          total = model_data.loc[:]['TOTAL']
@@ -760,7 +1028,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          frate = model_data.loc[:]['F_RATE']
          orate = model_data.loc[:]['O_RATE']
       else:
-         logger.error("Could not recognize line type from columns")
+         logger.error("FATAL ERROR: Could not recognize line type from columns")
          exit(1)
    if str(bs_method).upper() == 'MATCHED_PAIRS':
       if total.sum() < bs_min_samp:
@@ -773,7 +1041,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          )
       lower_pctile = 100.*((1.-level)/2.)
       upper_pctile = 100.-lower_pctile
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          fy_oy_all = fy_oy.sum()
          fy_on_all = fy_on.sum()
          fn_oy_all = fn_oy.sum()
@@ -860,7 +1128,8 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
             oobar_est_samp = np.concatenate((oobar_est_samples))
       else:
          logger.error(
-            line_type
+            "FATAL ERROR: "
+            + line_type
             + f" is not currently a valid option for bootstrapping {bs_method}"
          )
          exit(1)
@@ -875,7 +1144,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          )
       lower_pctile = 100.*((1.-level)/2.)
       upper_pctile = 100.-lower_pctile
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          ctc = np.array([fy_oy, fy_on, fn_oy, fn_on])
          fy_oy_samp, fy_on_samp, fn_oy_samp, fn_on_samp = [
             [] for item in range(4)
@@ -980,12 +1249,12 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          if batch_size <= 1:
             for _ in range(nrepl):
                idx = np.random.choice(
-                  len(fbs), 
-                  size=fbs.size, 
+                  len(fbs),
+                  size=fbs.size,
                   replace=True
                )
                fbs_bs, fss_bs, afss_bs, ufss_bs, frate_bs, orate_bs = [
-                  summary_stat[idx].T 
+                  summary_stat[idx].T
                   for summary_stat in [fbs, fss, afss, ufss, frate, orate]
                ]
                fbs_samples.append(fbs_bs.mean())
@@ -1006,14 +1275,14 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
                curr_batch_size = len(rep_arr[b:b+batch_size])
                idxs = [
                   np.random.choice(
-                     len(fbs), 
-                     size=fbs.size, 
+                     len(fbs),
+                     size=fbs.size,
                      replace=True
-                  ) 
+                  )
                   for _ in range(curr_batch_size)
                ]
                fbs_bs, fss_bs, afss_bs, ufss_bs, frate_bs, orate_bs = [
-                  np.take(np.array(summary_stat), idxs) 
+                  np.take(np.array(summary_stat), idxs)
                   for s, summary_stat in enumerate([fbs, fss, afss, ufss, frate, orate])
                ]
                fbs_samples.append(fbs_bs.mean(axis=1))
@@ -1027,18 +1296,19 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
             afss_est_samp = np.concatenate((afss_samples))
             ufss_est_samp = np.concatenate((ufss_samples))
             frate_est_samp = np.concatenate((frate_samples))
+            orate_est_samp = np.concatenate((orate_samples))
       else:
-         logger.error(line_type+" is not currently a valid option")
+         logger.error("FATAL ERROR: "+line_type+" is not currently a valid option")
          exit(1)
    else:
-      logger.error(bs_method+" is not a valid option")
+      logger.error("FATAL ERROR: "+bs_method+" is not a valid option")
       exit(1)
-   if stat == 'bias':
+   if stat == 'me':
       if str(bs_method).upper() in ['MATCHED_PAIRS','FORECASTS']:
          if line_type == 'SL1L2':
             stat_values_mean = np.mean(fbar_est_mean) - np.mean(obar_est_mean)
             stat_values = fbar_est_samp - obar_est_samp
-         elif line_type == 'CTC':
+         elif line_type in ['MCTC','CTC','NBRCTC']:
             stat_values = (fy_oy_samp + fy_on_samp)/(fy_oy_samp + fn_oy_samp)
    elif stat == 'rmse':
       if str(bs_method).upper() in ['MATCHED_PAIRS','FORECASTS']:
@@ -1150,23 +1420,23 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
             stat_values_pre_mean = obar_est_mean
             stat_values_mean = np.mean(stat_values_pre_mean)
             stat_values = obar_est_samp
-   if stat == 'fss':
+   elif stat == 'fss':
       if str(bs_method).upper() in ['MATCHED_PAIRS','FORECASTS']:
-         if line_type == 'NBRCNT':
-            stat_values_mean = np.mean(fss_est_mean)
-            stat_values = fss_est_samp
-   if stat == 'afss':
+          if line_type == 'NBRCNT':
+             stat_values_mean = np.mean(fss_est_mean)
+             stat_values = fss_est_samp
+   elif stat == 'afss':
       if str(bs_method).upper() in ['MATCHED_PAIRS','FORECASTS']:
-         if line_type == 'NBRCNT':
-            stat_values_mean = np.mean(afss_est_mean)
-            stat_values = afss_est_samp
-   if stat == 'ufss':
+          if line_type == 'NBRCNT':
+             stat_values_mean = np.mean(afss_est_mean)
+             stat_values = afss_est_samp
+   elif stat == 'ufss':
       if str(bs_method).upper() in ['MATCHED_PAIRS','FORECASTS']:
-         if line_type == 'NBRCNT':
-            stat_values_mean = np.mean(ufss_est_mean)
-            stat_values = ufss_est_samp
+          if line_type == 'NBRCNT':
+             stat_values_mean = np.mean(ufss_est_mean)
+             stat_values = ufss_est_samp
    elif stat == 'orate' or stat == 'baser':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          total_mean = (
             np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy)+np.sum(fn_on)
          )
@@ -1174,10 +1444,10 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          total = (fy_oy_samp + fy_on_samp + fn_oy_samp + fn_on_samp)
          stat_values = (fy_oy_samp + fn_oy_samp)/total
       elif line_type == 'NBRCNT':
-            stat_values_mean = np.mean(orate)
-            stat_values = orate_est_samp
+         stat_values_mean = np.mean(orate)
+         stat_values = orate_est_samp
    elif stat == 'frate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          total_mean = (
             np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy)+np.sum(fn_on)
          )
@@ -1185,10 +1455,10 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          total = (fy_oy_samp + fy_on_samp + fn_oy_samp + fn_on_samp)
          stat_values = (fy_oy_samp + fy_on_samp)/total
       elif line_type == 'NBRCNT':
-            stat_values_mean = np.mean(frate)
-            stat_values = frate_est_samp
+         stat_values_mean = np.mean(frate)
+         stat_values = frate_est_samp
    elif stat == 'orate_frate' or stat == 'baser_frate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          total_mean = (
             np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy)+np.sum(fn_on)
          )
@@ -1208,7 +1478,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
             [stat_values_fbar, stat_values_obar], axis=1
          )
    elif stat == 'accuracy':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          total_mean = (
             np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy)+np.sum(fn_on)
          )
@@ -1218,43 +1488,43 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          total = (fy_oy_samp + fy_on_samp + fn_oy_samp + fn_on_samp)
          stat_values = (fy_oy_samp + fn_on_samp)/total
    elif stat == 'fbias':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = (
             (np.sum(fy_oy)+np.sum(fy_on))
             /(np.sum(fy_oy)+np.sum(fn_oy))
          )
          stat_values = (fy_oy_samp + fy_on_samp)/(fy_oy_samp + fn_oy_samp)
    elif stat == 'pod' or stat == 'hrate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = np.sum(fy_oy)/(np.sum(fy_oy)+np.sum(fn_oy))
          stat_values = fy_oy_samp/(fy_oy_samp + fn_oy_samp)
    elif stat == 'pofd' or stat == 'farate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = np.sum(fy_on)/(np.sum(fy_on)+np.sum(fn_on))
          stat_values = fy_on_samp/(fy_on_samp + fn_on_samp)
    elif stat == 'podn':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = np.sum(fn_on)/(np.sum(fy_on)+np.sum(fn_on))
          stat_values = fn_on_samp/(fy_on_samp + fn_on_samp)
    elif stat == 'faratio':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = np.sum(fy_on)/(np.sum(fy_on)+np.sum(fy_oy))
          stat_values = fy_on_samp/(fy_on_samp + fy_oy_samp)
    elif stat == 'sratio':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = (
             1. - (np.sum(fy_on)/(np.sum(fy_on)+np.sum(fy_oy)))
          )
          stat_values = 1. - (fy_on_samp/(fy_on_samp + fy_oy_samp))
    elif stat == 'csi' or stat == 'ts':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = (
             np.sum(fy_oy)
             /(np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy))
          )
          stat_values = fy_oy_samp/(fy_oy_samp + fy_on_samp + fn_oy_samp)
    elif stat == 'gss' or stat == 'ets':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          total_mean = (
             np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy)+np.sum(fn_on)
          )
@@ -1272,7 +1542,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
             (fy_oy_samp - C)/(fy_oy_samp + fy_on_samp + fn_oy_samp - C)
          )
    elif stat == 'hk' or stat == 'tss' or stat == 'pss':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          stat_values_mean = (
             (np.sum(fy_oy)*np.sum(fn_on)-np.sum(fy_on)*np.sum(fn_oy))
             /(
@@ -1285,7 +1555,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
             /((fy_oy_samp+fn_oy_samp)*(fy_on_samp+fn_on_samp))
          )
    elif stat == 'hss':
-      if line_type == 'CTC':
+      if line_type in ['MCTC','CTC','NBRCTC']:
          total_mean = (
             np.sum(fy_oy)+np.sum(fy_on)+np.sum(fn_oy)+np.sum(fn_on)
          )
@@ -1308,7 +1578,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
          C = (Ca + Cb)/total
          stat_values = (fy_oy_samp + fn_on_samp - C)/(total - C)
    else:
-      logger.error(stat+" is not a valid option")
+      logger.error("FATAL ERROR: "+stat+" is not a valid option")
       exit(1)
    stat_deltas = stat_values-stat_values_mean
    stat_ci_lower = np.nanpercentile(stat_deltas, lower_pctile)
@@ -1317,7 +1587,7 @@ def calculate_bootstrap_ci(logger, bs_method, model_data, stat, nrepl, level,
       dict(CI_LOWER=[stat_ci_lower], CI_UPPER=[stat_ci_upper], STATUS=[status])
    )
 
-def calculate_stat(logger, model_data, stat):
+def calculate_stat(logger, model_data, stat, conversion):
    """! Calculate the statistic from the data from the
         read in MET .stat file(s)
 
@@ -1330,7 +1600,6 @@ def calculate_stat(logger, model_data, stat):
 
         Returns:
            stat_values       - Dataframe of the statistic values
-           stat_values_array - array of the statistic values
            stat_plot_name    - string of the formal statistic
                                name being plotted
    """
@@ -1346,6 +1615,10 @@ def calculate_stat(logger, model_data, stat):
       else:
          stat_values = model_data.loc[:]['TOTAL']
    else:
+      if np.any(conversion):
+         bool_convert = True
+      else:
+         bool_convert = False
       if all(elem in model_data_columns for elem in
             ['FBAR', 'OBAR', 'MAE']):
          line_type = 'SL1L2'
@@ -1354,6 +1627,28 @@ def calculate_stat(logger, model_data, stat):
          fobar = model_data.loc[:]['FOBAR']
          ffbar = model_data.loc[:]['FFBAR']
          oobar = model_data.loc[:]['OOBAR']
+         if bool_convert:
+             coef, const = conversion
+             fbar_og = fbar
+             obar_og = obar
+             fbar = coef*fbar_og+const
+             obar = coef*obar_og+const
+             fobar = (
+                np.power(coef, 2)*fobar 
+                + coef*const*fbar_og 
+                + coef*const*obar_og
+                + np.power(const, 2)
+             )
+             ffbar = (
+                np.power(coef, 2)*ffbar 
+                + 2.*coef*const*fbar_og 
+                + np.power(const, 2)
+             )
+             oobar = (
+                np.power(coef, 2)*oobar 
+                + 2.*coef*const*obar_og
+                + np.power(const, 2)
+             )
       elif all(elem in model_data_columns for elem in 
             ['FABAR', 'OABAR', 'MAE']):
          line_type = 'SAL1L2'
@@ -1362,6 +1657,19 @@ def calculate_stat(logger, model_data, stat):
          foabar = model_data.loc[:]['FOABAR']
          ffabar = model_data.loc[:]['FFABAR']
          ooabar = model_data.loc[:]['OOABAR']
+         if bool_convert:
+             coef, const = conversion
+             fabar = coef*fabar
+             oabar = coef*oabar
+             foabar = (
+                np.power(coef, 2)*foabar 
+             )
+             ffabar = (
+                np.power(coef, 2)*ffabar 
+             )
+             ooabar = (
+                np.power(coef, 2)*ooabar 
+             )
       elif all(elem in model_data_columns for elem in
             ['UFBAR', 'VFBAR']):
          line_type = 'VL1L2'
@@ -1372,6 +1680,31 @@ def calculate_stat(logger, model_data, stat):
          uvfobar = model_data.loc[:]['UVFOBAR']
          uvffbar = model_data.loc[:]['UVFFBAR']
          uvoobar = model_data.loc[:]['UVOOBAR']
+         if bool_convert:
+             coef, const = conversion
+             ufbar_og = ufbar
+             vfbar_og = vfbar
+             uobar_og = uobar
+             vobar_og = vobar
+             ufbar = coef*ufbar_og+const
+             vfbar = coef*vfbar_og+const
+             uobar = coef*uobar_og+const
+             vobar = coef*vobar_og+const
+             uvfobar = (
+                np.power(coef, 2)*uvfobar 
+                + coef*const*(ufbar_og + uobar_og + vfbar_og + vobar_og) 
+                + np.power(const, 2)
+             )
+             uvffbar = (
+                np.power(coef, 2)*uvffbar 
+                + 2.*coef*const*(ufbar_og + vfbar_og) 
+                + np.power(const, 2)
+             )
+             uvoobar = (
+                np.power(coef, 2)*uvoobar 
+                + 2.*coef*const*(uobar_og + vobar_og) 
+                + np.power(const, 2)
+             )
       elif all(elem in model_data_columns for elem in 
             ['UFABAR', 'VFABAR']):
          line_type = 'VAL1L2'
@@ -1382,6 +1715,21 @@ def calculate_stat(logger, model_data, stat):
          uvfoabar = model_data.loc[:]['UVFOABAR']
          uvffabar = model_data.loc[:]['UVFFABAR']
          uvooabar = model_data.loc[:]['UVOOABAR']
+         if bool_convert:
+             coef, const = conversion
+             ufabar = coef*ufabar
+             vfabar = coef*vfabar
+             uoabar = coef*uoabar
+             voabar = coef*voabar
+             uvfoabar = (
+                np.power(coef, 2)*uvfoabar 
+             )
+             uvffabar = (
+                np.power(coef, 2)*uvffabar 
+             )
+             uvooabar = (
+                np.power(coef, 2)*uvooabar 
+             )
       elif all(elem in model_data_columns for elem in
             ['VDIFF_SPEED', 'VDIFF_DIR']):
          line_type = 'VCNT'
@@ -1401,6 +1749,11 @@ def calculate_stat(logger, model_data, stat):
          vdiff_dir = model_data.loc[:]['VDIFF_DIR']
          speed_err = model_data.loc[:]['SPEED_ERR']
          dir_err = model_data.loc[:]['DIR_ERR']
+         if bool_convert:
+            logger.error(
+               f"FATAL ERROR: Cannot convert column units for line_type \"{line_type}\""
+            )
+            exit(1) 
       elif all(elem in model_data_columns for elem in
             ['FY_OY', 'FN_ON']):
          line_type = 'CTC'
@@ -1410,33 +1763,114 @@ def calculate_stat(logger, model_data, stat):
          fn_oy = model_data.loc[:]['FN_OY']
          fn_on = model_data.loc[:]['FN_ON']
       elif all(elem in model_data_columns for elem in 
-            ['FBS','FSS','AFSS','UFSS','F_RATE','O_RATE']):
-         line_type = 'NBRCNT'
+            ['N_CAT', 'F0_O0']):
+         line_type = 'MCTC'
          total = model_data.loc[:]['TOTAL']
-         fbs = model_data.loc[:]['FBS']
-         fss = model_data.loc[:]['FSS']
-         afss = model_data.loc[:]['AFSS']
-         ufss = model_data.loc[:]['UFSS']
-         frate = model_data.loc[:]['F_RATE']
-         orate = model_data.loc[:]['O_RATE']
+         counts = model_data.loc[:]['COUNTS']
+         n_cat = model_data.loc[:]['N_CAT']/counts
+         i_val = model_data.loc[:]['i_vals']/counts
+         fy_oy_cols = get_MCTC_cols_for_sum(n_cat, i_val, 'fy_oy')
+         fy_on_cols = get_MCTC_cols_for_sum(n_cat, i_val, 'fy_on')
+         fn_oy_cols = get_MCTC_cols_for_sum(n_cat, i_val, 'fn_oy')
+         fy_oy = np.array(
+            [
+                model_data.reset_index().loc[i, fy_oy_cols[i]].sum() 
+                for i in model_data.reset_index().index
+            ]
+         )
+         fy_on = np.array(
+            [
+                model_data.reset_index().loc[i, fy_on_cols[i]].sum() 
+                for i in model_data.reset_index().index
+            ]
+         )
+         fn_oy = np.array(
+            [
+                model_data.reset_index().loc[i, fn_oy_cols[i]].sum() 
+                for i in model_data.reset_index().index
+            ]
+         )
+         fy_oy = pd.DataFrame(fy_oy, index=total.index)[0]
+         fy_on = pd.DataFrame(fy_on, index=total.index)[0]
+         fn_oy = pd.DataFrame(fn_oy, index=total.index)[0]
+         fn_on = total - fy_oy - fy_on - fn_oy
+      elif all(elem in model_data_columns for elem in 
+            ['FBS','FSS','AFSS','UFSS','F_RATE','O_RATE']):
+          line_type = 'NBRCNT'
+          total = model_data.loc[:]['TOTAL']
+          fbs = model_data.loc[:]['FBS']
+          fss = model_data.loc[:]['FSS']
+          afss = model_data.loc[:]['AFSS']
+          ufss = model_data.loc[:]['UFSS']
+          frate = model_data.loc[:]['F_RATE']
+          orate = model_data.loc[:]['O_RATE']
+      elif all(elem in model_data_columns for elem in
+            ['CRPS', 'CRPSS', 'RMSE', 'SPREAD', 'ME', 'MAE']):
+         line_type = 'ECNT'
+         total  = model_data.loc[:]['TOTAL']
+         crps   = model_data.loc[:]['CRPS']
+         crpss  = model_data.loc[:]['CRPSS']
+         rmse   = model_data.loc[:]['RMSE']
+         spread = model_data.loc[:]['SPREAD']
+         me     = model_data.loc[:]['ME']
+         mae     = model_data.loc[:]['MAE']
+      elif all(elem in model_data_columns for elem in
+            ['ROC_AUC', 'BRIER', 'BSS', 'BSS_SMPL']):
+         line_type = 'PSTD'
+         total  = model_data.loc[:]['TOTAL']
+         roc_area =  model_data.loc[:]['ROC_AUC']
+         bs =  model_data.loc[:]['BRIER']
+         bss =  model_data.loc[:]['BSS']
+         bss_smpl =  model_data.loc[:]['BSS_SMPL']
       else:
-         logger.error("Could not recognize line type from columns")
+         logger.error("FATAL ERROR: Could not recognize line type from columns")
          exit(1)
    stat_plot_name = get_stat_plot_name(logger, stat)
-   if stat == 'bias':
+   if stat == 'me':
       if line_type == 'SL1L2':
          stat_values = fbar - obar
       elif line_type == 'VL1L2':
          stat_values = np.sqrt(uvffbar) - np.sqrt(uvoobar)
       elif line_type == 'VCNT':
          stat_values = fbar - obar
-      elif line_type == 'CTC':
+      elif line_type in ['MCTC', 'CTC']:
          stat_values = (fy_oy + fy_on)/(fy_oy + fn_oy)
    elif stat == 'rmse':
       if line_type == 'SL1L2':
          stat_values = np.sqrt(ffbar + oobar - 2*fobar)
       elif line_type == 'VL1L2':
          stat_values = np.sqrt(uvffbar + uvoobar - 2*uvfobar)
+      elif line_type == 'ECNT':
+         stat_values = rmse
+   elif stat == 'crps':
+      if line_type == 'ECNT':
+        stat_values = crps
+   elif stat == 'crpss':
+      if line_type == 'ECNT':
+        stat_values = crpss
+   elif stat == 'spread':
+      if line_type == 'ECNT':
+        stat_values = spread
+   elif stat == 'me':
+      if line_type == 'ECNT':
+        stat_values = me
+   elif stat == 'mae':
+      if line_type == 'SL1L2':
+        stat_values = mae
+      elif line_type == 'ECNT':
+        stat_values = mae
+   elif stat == 'bs':
+      if line_type == 'PSTD':
+        stat_values = bs
+   elif stat == 'bss':
+      if line_type == 'PSTD':
+        stat_values = bss
+   elif stat == 'bss_smpl':
+      if line_type == 'PSTD':
+        stat_values = bss_smpl
+   elif stat == 'roc_area':
+      if line_type == 'PSTD':
+        stat_values = roc_area
    elif stat == 'bcrmse':
       if line_type == 'SL1L2':
          var_f = ffbar - fbar*fbar
@@ -1560,12 +1994,12 @@ def calculate_stat(logger, model_data, stat):
       if line_type == 'VCNT':
          stat_values = fdir
    elif stat == 'orate' or stat == 'baser':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = (fy_oy + fn_oy)/total
       elif line_type == 'NBRCNT':
          stat_values = orate
    elif stat == 'frate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = (fy_oy + fy_on)/total
       elif line_type == 'NBRCNT':
          stat_values = frate
@@ -1579,145 +2013,56 @@ def calculate_stat(logger, model_data, stat):
       if line_type == 'NBRCNT':
          stat_values = ufss
    elif stat == 'orate_frate' or stat == 'baser_frate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values_fbar = (fy_oy + fy_on)/total
          stat_values_obar = (fy_oy + fn_oy)/total
          stat_values = pd.concat(
             [stat_values_fbar, stat_values_obar], axis=1
          )
    elif stat == 'accuracy':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = (fy_oy + fn_on)/total
    elif stat == 'fbias':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = (fy_oy + fy_on)/(fy_oy + fn_oy)
    elif stat == 'pod' or stat == 'hrate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = fy_oy/(fy_oy + fn_oy)
    elif stat == 'pofd' or stat == 'farate':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = fy_on/(fy_on + fn_on)
    elif stat == 'podn':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = fn_on/(fy_on + fn_on)
    elif stat == 'faratio':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = fy_on/(fy_on + fy_oy)
    elif stat == 'sratio':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = 1. - (fy_on/(fy_on + fy_oy))
    elif stat == 'csi' or stat == 'ts':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = fy_oy/(fy_oy + fy_on + fn_oy)
    elif stat == 'gss' or stat == 'ets':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          C = ((fy_oy + fy_on)*(fy_oy + fn_oy))/total
          stat_values = (fy_oy - C)/(fy_oy + fy_on + fn_oy - C)
    elif stat == 'hk' or stat == 'tss' or stat == 'pss':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          stat_values = (
             ((fy_oy*fn_on)-(fy_on*fn_oy))/((fy_oy+fn_oy)*(fy_on+fn_on))
          )
    elif stat == 'hss':
-      if line_type == 'CTC':
+      if line_type in ['MCTC', 'CTC', 'NBRCTC']:
          Ca = (fy_oy+fy_on)*(fy_oy+fn_oy)
          Cb = (fn_oy+fn_on)*(fy_on+fn_on)
          C = (Ca + Cb)/total
          stat_values = (fy_oy + fn_on - C)/(total - C)
    else:
-      logger.error(stat+" is not a valid option")
+      logger.error("FATAL ERROR: "+stat+" is not a valid option")
       exit(1)
    nindex = stat_values.index.nlevels
-   if stat == 'fbar_obar' or stat == 'orate_frate' or stat == 'baser_frate':
-      try:
-         if nindex == 1:
-            index0 = len(stat_values_fbar.index.get_level_values(0).unique())
-            stat_values_array_fbar = (
-               np.ma.masked_invalid(
-                  stat_values_fbar.values.reshape(index0)
-               )
-            )
-            index0 = len(stat_values_obar.index.get_level_values(0).unique())
-            stat_values_array_obar = (
-               np.ma.masked_invalid(
-                  stat_values_obar.values.reshape(index0)
-               )
-            )
-         elif nindex == 2:
-            index0 = len(stat_values_fbar.index.get_level_values(0).unique())
-            index1 = len(stat_values_fbar.index.get_level_values(1).unique())
-            stat_values_array_fbar = (
-               np.ma.masked_invalid(
-                  stat_values_fbar.values.reshape(index0, index1)
-               )
-            )
-            index0 = len(stat_values_obar.index.get_level_values(0).unique())
-            index1 = len(stat_values_obar.index.get_level_values(1).unique())
-            stat_values_array_obar = (
-               np.ma.masked_invalid(
-                  stat_values_obar.values.reshape(index0, index1)
-               )
-            )
-         elif nindex == 3:
-            index0 = len(stat_values_fbar.index.get_level_values(0).unique())
-            index1 = len(stat_values_fbar.index.get_level_values(1).unique())
-            index2 = len(stat_values_fbar.index.get_level_values(2).unique())
-            stat_values_array_fbar = (
-               np.ma.masked_invalid(
-                  stat_values_fbar.values.reshape(index0, index1, index2)
-               )
-            )
-            index0 = len(stat_values_obar.index.get_level_values(0).unique())
-            index1 = len(stat_values_obar.index.get_level_values(1).unique())
-            index2 = len(stat_values_obar.index.get_level_values(2).unique())
-            stat_values_array_obar = (
-               np.ma.masked_invalid(
-                  stat_values_obar.values.reshape(index0, index1, index2)
-               )
-            )
-         stat_values_array = np.ma.array([stat_values_array_fbar,
-                                          stat_values_array_obar])
-      except ValueError as e:
-         logger.warning(e)
-         logger.warning("This is usually OK, and will happen if "
-                        + "event_equalization=False.") 
-         logger.warning("Setting stat_values_array to Nonetype.")
-         stat_values_array = None
-         logger.warning("Continuing ...")
-   else:
-      try:
-         if nindex == 1:
-            index0 = len(stat_values.index.get_level_values(0).unique())
-            stat_values_array = (
-               np.ma.masked_invalid(
-                  stat_values.values.reshape(1, index0)
-               )
-            )
-         elif nindex == 2:
-            index0 = len(stat_values.index.get_level_values(0).unique())
-            index1 = len(stat_values.index.get_level_values(1).unique())
-            stat_values_array = (
-               np.ma.masked_invalid(
-                  stat_values.values.reshape(1, index0, index1)
-               )
-            )
-         elif nindex == 3:
-            index0 = len(stat_values.index.get_level_values(0).unique())
-            index1 = len(stat_values.index.get_level_values(1).unique())
-            index2 = len(stat_values.index.get_level_values(2).unique())
-            stat_values_array = (
-               np.ma.masked_invalid(
-                  stat_values.values.reshape(1, index0, index1, index2)
-               )
-            )
-      except ValueError as e:
-         logger.warning(e)
-         logger.warning("This is usually OK, and will happen if "
-                        + "event_equalization=False.") 
-         logger.warning("Setting stat_values_array to Nonetype.")
-         stat_values_array = None
-         logger.warning("Continuing ...")
-   return stat_values, stat_values_array, stat_plot_name
+   return stat_values, None, stat_plot_name
 
 def get_lead_avg_file(stat, input_filename, fcst_lead, output_base_dir):
    lead_avg_filename = stat + '_' + os.path.basename(input_filename) \
@@ -1791,6 +2136,8 @@ def equalize_samples(logger, df, group_by):
                 df_merged = df_merged.merge(
                     dfs_i, how='inner', indicator=False
                 )
+            # Reduce the size of the merged df as we go by removing duplicates
+            df_merged = df_merged.drop_duplicates()
         # make sure to remove duplicate rows (looking only at the columns in 
         # cols_to_check) to reduce comp time in the next in the next step
         match_these = df_merged.drop_duplicates()
@@ -1809,18 +2156,26 @@ def equalize_samples(logger, df, group_by):
     df_equalized = df_equalized.loc[
         df_equalized[cols_to_check+['MODEL']].drop_duplicates().index
     ]
-    # Regroup the data and move forward with this groups!
+    # Remove duplicates again, this time among both the columns 
+    # Regroup the data and move forward with these groups!
     df_equalized_groups = df_equalized.groupby(group_by)
     # Check that groups are indeed equally sized for each independent variable
     df_groups_sizes = df_equalized_groups.size()
-    df_groups_sizes.index = df_groups_sizes.index.set_levels(
-        df_groups_sizes.index.levels[-1].astype(str), level=-1
-    )
-    data_are_equalized = np.all([
-        np.unique(df_groups_sizes.xs(str(unique_indep_var), level=1)).size == 1
-        for unique_indep_var 
-        in np.unique(np.array(list(df_groups_sizes.keys())).T[1])
-    ])
+    if df_groups_sizes.size > 0:
+        df_groups_sizes.index = df_groups_sizes.index.set_levels(
+            df_groups_sizes.index.levels[-1].astype(str), level=-1
+        )
+        data_are_equalized = np.all([
+            np.unique(df_groups_sizes.xs(str(unique_indep_var), level=1)).size == 1
+            for unique_indep_var 
+            in np.unique(np.array(list(df_groups_sizes.keys())).T[1])
+        ])
+    else:
+        logger.info(
+            "Sample equalization was successful but resulted in an empty"
+            + f" dataframe."
+        )
+        data_are_equalized = True
     if data_are_equalized:
         logger.info(
             "Data were successfully equalized along the independent"
@@ -1828,14 +2183,14 @@ def equalize_samples(logger, df, group_by):
         )
         return df_equalized, data_are_equalized
     else:
-        logger.error(
-            "Data equalization along the independent variable failed."
+        logger.warning(
+            "FATAL ERROR: Data equalization along the independent variable failed."
         )
-        logger.error(
+        logger.warning(
             "This may be a bug in the verif_plotting code. Please contact"
             + " the verif_plotting code manager about your issue."
         )
-        logger.error(
+        logger.warning(
             "Skipping equalization.  Sample sizes will not be plotted."
         )
         return df, data_are_equalized
@@ -1875,3 +2230,64 @@ def get_name_for_listed_items(listed_items, joinchars, prechars, postchars, prec
                 start=item
     return joinchars.join(new_items)
 
+def get_MCTC_i_vals(df_ctc, col_var, rename_col_var):
+    try:
+        i = np.argwhere(np.isin(
+            df_ctc.loc[:][col_var].split(','), 
+            df_ctc.loc[:][rename_col_var].replace('>=','')
+        ))[0][0]
+        if df_ctc.loc[:]['N_CAT'] != len(df_ctc.loc[:][col_var].split(',')):
+            i+=1
+    except IndexError:
+        i = 'NA'
+    return i
+
+def convert_MCTC_to_CTC(df_mctc, col_var, rename_col_var):
+    ctc_vals = np.unique([mctc_vals.split(',') for mctc_vals in df_mctc[col_var]])
+    ctc_vals_dict = {}
+    for v, val in enumerate(ctc_vals):
+        ctc_vals_dict[f'val{v+1}'] = val
+    df_ctc = df_mctc.assign(**ctc_vals_dict).melt(df_mctc.keys())
+    df_ctc = df_ctc.rename(columns={'value': rename_col_var})
+    df_ctc['i_vals'] = df_ctc.apply(lambda x: get_MCTC_i_vals(x, col_var, rename_col_var), axis=1)
+    return df_ctc
+
+def get_MCTC_cols_for_sum(n_cats, i_vals, ctc_metric_name):
+    cols = []
+    if ctc_metric_name.lower() in ['fy_oy','a']:
+        for i_val in i_vals:
+            F_num = int(i_val)
+            O_num = int(i_val)
+            cols.append([f'F{F_num}_O{O_num}'])
+    elif ctc_metric_name.lower() in ['fy_on','b']:
+        for n, i_val in enumerate(i_vals):
+            cols_for_sum = []
+            for ii in np.arange(n_cats[n], dtype='int'):
+                if int(i_val) != int(ii):
+                    F_num = int(i_val)
+                    O_num = int(ii)
+                    cols_for_sum.append(f'F{F_num}_O{O_num}')
+            cols.append(cols_for_sum)
+    elif ctc_metric_name.lower() in ['fn_oy','c']:
+        for n, i_val in enumerate(i_vals):
+            cols_for_sum = []
+            for ii in np.arange(n_cats[n], dtype='int'):
+                if int(i_val) != int(ii):
+                    F_num = int(ii)
+                    O_num = int(i_val)
+                    cols_for_sum.append(f'F{F_num}_O{O_num}')
+            cols.append(cols_for_sum)
+    else:
+        print(f"ctc_metric_name, {ctc_metric_name} is not permitted.")
+        sys.exit(1)
+    return cols
+
+def get_model_stats_key(model_alias_dict, requested_model):
+    if requested_model not in model_alias_dict:
+        return requested_model
+    else:
+        stats_key = model_alias_dict[requested_model]['stats_key']
+        if not stats_key:
+            return requested_model
+        else:
+            return stats_key

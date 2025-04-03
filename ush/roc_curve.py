@@ -1,9 +1,10 @@
+#!/usr/bin/env python3
 ###############################################################################
 #
 # Name:          roc_curve.py
 # Contact(s):    Marcel Caron
 # Developed:     Sep. 26, 2022 by Marcel Caron 
-# Last Modified: Jan. 24, 2023 by Marcel Caron             
+# Last Modified: Sep. 26, 2022 by Marcel Caron             
 # Title:         Receiver Operator Characteristic (ROC) curve
 # Abstract:      Plots METplus CTC output as a line plot, probability of
 #                detection, which represents the y-axis, varying by false alarm 
@@ -23,14 +24,12 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-import matplotlib.image as mpimg
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from datetime import datetime, timedelta as td
-
+import shutil
 
 SETTINGS_DIR = os.environ['USH_DIR']
 sys.path.insert(0, os.path.abspath(SETTINGS_DIR))
-from settings import Toggle, Templates, Paths, Presets, ModelSpecs, Reference
+from settings import Toggle, Templates, Presets, ModelSpecs, Reference
 from plotter import Plotter
 from prune_stat_files import prune_data
 import plot_util
@@ -39,11 +38,13 @@ from check_variables import *
 
 # ================ GLOBALS AND CONSTANTS ================
 
-plotter = Plotter(fig_size=(20., 14.))
+plotter = Plotter(
+    fig_size=(10., 8.), legend_font_size=10, fig_subplot_right=.77,
+    fig_subplot_left=.23, fig_subplot_top=.87, fig_subplot_bottom=.23                  
+)
 plotter.set_up_plots()
 toggle = Toggle()
 templates = Templates()
-paths = Paths()
 presets = Presets()
 model_colors = ModelSpecs()
 reference = Reference()
@@ -63,19 +64,14 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
                       metric1_name: str = 'SRATIO', metric2_name: str = 'POD', 
                       metric3_name: str = 'CSI', date_type: str = 'VALID', 
                       date_hours: list = [0,6,12,18], verif_type: str = 'pres', 
-                      line_type: str = 'CTC', save_dir: str = '.', dpi: int = 300, 
-                      confidence_intervals: bool = False, interp_pts: list = [], 
-                      bs_nrep: int = 5000, bs_method: str = 'MATCHED_PAIRS', 
-                      ci_lev: float = .95, bs_min_samp: int = 30, 
-                      eval_period: str = 'TEST', display_averages: bool = True, 
-                      save_header: str = '', plot_group: str = 'sfc_upper',
-                      sample_equalization: bool = True,
-                      plot_logo_left: bool = False,
-                      plot_logo_right: bool = False, path_logo_left: str = '.',
-                      path_logo_right: str = '.', zoom_logo_left: float = 1.,
-                      zoom_logo_right: float = 1., xoffset_logo_left: float = 1.,
-                      yoffset_logo_left: float = 1., xoffset_logo_right: float = 1.,
-                      yoffset_logo_right: float = 1.):
+                      line_type: str = 'CTC', save_dir: str = '.', 
+                      restart_dir: str = '.', dpi: int = 100, 
+                      confidence_intervals: bool = False, bs_nrep: int = 5000, 
+                      bs_method: str = 'MATCHED_PAIRS', ci_lev: float = .95, 
+                      bs_min_samp: int = 30, eval_period: str = 'TEST', 
+                      display_averages: bool = True, save_header: str = '', 
+                      plot_group: str = 'sfc_upper',
+                      sample_equalization: bool = True):
 
     logger.info("========================================")
     logger.info(f"Creating Plot {num} ...")
@@ -141,7 +137,7 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         frange_save_string = f'F{flead:02d}'
         df = df[df['LEAD_HOURS'] == flead]
     else:
-        e1 = f"Invalid forecast lead: \'{flead}\'"
+        e1 = f"FATAL ERROR: Invalid forecast lead: \'{flead}\'"
         e2 = f"Please check settings for forecast leads."
         logger.error(e1)
         logger.error(e2)
@@ -154,6 +150,11 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         for x in date_hours
     ]]
 
+    if df.empty:
+        logger.warning(f"Empty Dataframe. Continuing onto next plot...")
+        plt.close(num)
+        logger.info("========================================")
+        return None
     if interp_pts and '' not in interp_pts:
         interp_shape = list(df['INTERP_MTHD'])[0]
         if 'SQUARE' in interp_shape:
@@ -164,10 +165,10 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
             widths = [1 for p in interp_pts]
         else:
             error_string = (
-                f"Unknown INTERP_MTHD used to compute INTERP_PNTS: {interp_shape}."
+                f"FATAL ERROR: Unknown INTERP_MTHD used to compute INTERP_PNTS: {interp_shape}."
                 + f" Check the INTERP_MTHD column in your METplus stats files."
                 + f" INTERP_MTHD must have either \"SQUARE\" or \"CIRCLE\""
-                + f" in the name"
+                + f" in the name."
             )
             logger.error(error_string)
             raise ValueError(error_string)
@@ -184,13 +185,13 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
             interp_pts_string = f'(Width{interp_pts_phrase})'
             interp_pts_save_string = f'width{interp_pts_save_phrase}'
             df = df[df['INTERP_PNTS'].isin(interp_pts)]
-        elif isinstance(intep_pts, np.int):
-            interp_pts_string = f'(Wifth {widths:d})'
+        elif isinstance(interp_pts, np.int):
+            interp_pts_string = f'(Width {widths:d})'
             interp_pts_save_string = f'width{widths:d}'
             df = df[df['INTERP_PNTS'] == widths]
         else:
             error_string = (
-                f"Invalid interpolation points entry: \'{interp_pts}\'\n"
+                f"FATAL ERROR: Invalid interpolation points entry: \'{interp_pts}\'\n"
                 + f"Please check settings for interpolation points."
             )
             logger.error(error_string)
@@ -207,13 +208,13 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
                 opt_letter = requested_thresh_letter[0][:2]
                 break
             else:
-                e = ("Threshold operands do not match among all requested"
+                e = ("FATAL ERROR: Threshold operands do not match among all requested"
                     + f" thresholds.")
                 logger.error(e)
                 logger.error("Quitting ...")
                 raise ValueError(e+"\nQuitting ...")
     if not symbol_found:
-        e = "None of the requested thresholds contain a valid symbol."
+        e = "FATAL ERROR: None of the requested thresholds contain a valid symbol."
         logger.error(e)
         logger.error("Quitting ...")
         raise ValueError(e+"\nQuitting ...")
@@ -281,8 +282,6 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
     df_groups = df.groupby(group_by)
     # Aggregate unit statistics before calculating metrics
     df_aggregated = df_groups.sum()
-    if sample_equalization:
-        df_aggregated['COUNTS']=df_groups.size()
     # Remove data if they exist for some but not all models at some value of 
     # the indep. variable. Otherwise plot_util.calculate_stat will throw an 
     # error
@@ -358,11 +357,6 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         df_aggregated, values=str(metric2_name).upper(), columns='MODEL', 
         index='FCST_THRESH_VALUE'
     )
-    if sample_equalization:
-        pivot_counts = pd.pivot_table(
-            df_aggregated, values='COUNTS', columns='MODEL',
-            index='FCST_THRESH_VALUE'
-        )
     pivot_metric1 = pivot_metric1.dropna() 
     pivot_metric2 = pivot_metric2.dropna() 
     all_thresh_idx = np.unique(
@@ -413,10 +407,6 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
             pivot_metric2.drop(
                 labels=thresh_idx, inplace=True, errors='ignore'
             )
-            if sample_equalization:
-                pivot_counts.drop(
-                    labels=thresh_idx, inplace=True, errors='ignore'
-                )
     if confidence_intervals:
         for ci_thresh_idx in all_ci_thresh_idx:
             if np.any([
@@ -445,10 +435,6 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
             pivot_metric2.drop(
                 columns=model_col, inplace=True, errors='ignore'
             )
-            if sample_equalization:
-                pivot_counts.drop(
-                    column=model_col, inplace=True, errors='ignore'
-                )
             if confidence_intervals:
                 pivot_ci_lower1.drop(
                     columns=model_col, inplace=True, errors='ignore'
@@ -556,45 +542,8 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
 
     # Plot data
     logger.info("Begin plotting ...")
-    '''
-    gray_colors = [
-        '#ffffff',
-        '#f5f5f5',
-        '#ececec',
-        '#dfdfdf',
-        '#cbcbcb',
-        '#b2b2b2',
-        '#8e8e8e',
-        '#6f6f6f',
-        '#545454',
-        '#3f3f3f',
-    ]
-
-    cmap = colors.ListedColormap(gray_colors)
-    '''
     grid_ticks = np.arange(0.001, 1.001, 0.001)
     fr_g, pod_g = np.meshgrid(grid_ticks, grid_ticks)
-    '''
-    bias = pod_g / sr_g
-    csi = 1.0 / (1.0 / sr_g + 1.0 / pod_g - 1.0)
-    bias_contour_vals = [
-        0.1, 0.2, 0.4, 0.6, 0.8, 1., 1.2, 1.5, 2., 3., 5., 10.
-    ]
-    b_contour = plt.contour(
-        sr_g, pod_g, bias, bias_contour_vals, 
-        colors='gray', linestyles='dashed'
-    )
-    csi_contour = plt.contourf(
-        sr_g, pod_g, csi, np.arange(0., 1.1, 0.1), cmap=cmap, extend='neither'
-    )
-    plt.clabel(
-        b_contour, fmt='%1.1f', 
-        manual=[
-            get_bias_label_position(bias_value, .75) 
-            for bias_value in bias_contour_vals
-        ]
-    )
-    '''
     random_contour = plt.contour(
         fr_g, pod_g, pod_g / fr_g, [1.],
         colors='gray', linestyles='dashed'
@@ -611,9 +560,9 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         requested_thresh_value[i] for i in requested_thresh_argsort
     ]
     thresh_markers = [
-        ('o',12),('P',14),('^',14),('X',14),('s',12),('D',12),('v',14),
-        ('p',14),('<',14),('d',14),(r'$\spadesuit$',14),('>',14),
-        (r'$\clubsuit$',14)
+        ('o',10),('P',11),('^',11),('X',11),('s',10),('D',10),('v',11),
+        ('p',11),('<',11),('d',11),(r'$\spadesuit$',11),('>',11),
+        (r'$\clubsuit$',11)
     ]
     if len(thresh_labels)+len(model_list) > 12:
         e = (f"The plot legend may be cut off.  Consider reducing the number"
@@ -621,7 +570,7 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         logger.warning(e)
         logger.warning("Continuing ...")
     if len(thresh_labels) > len(thresh_markers):
-        e = (f"Too many thresholds were requested.  Only {len(thresh_markers)}"
+        e = (f"FATAL ERROR: Too many thresholds were requested.  Only {len(thresh_markers)}"
              + f" or fewer thresholds may be plotted.")
         logger.error(e)
         logger.error("Quitting ...")
@@ -665,16 +614,6 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         f'{opt}{thresh_label} {units}'
         for thresh_label in thresh_labels
     ]
-    if sample_equalization:
-        counts = pivot_counts.mean(axis=1, skipna=True).fillna('')
-        counts = [
-            str(int(count)) if not isinstance(count,str) else count
-            for count in counts
-        ]
-        labels = [
-            label+f' ({counts[l]})'
-            for l, label in enumerate(labels)
-        ]
     for m in range(len(mod_setting_dicts)):
         if model_list[m] in model_colors.model_alias:
             model_plot_name = (
@@ -712,15 +651,9 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
                                       + f' {y_mean:.2f})')
         else:
             metric_mean_fmt_string = f'{model_plot_name}'
-        line_start = float(
-            np.multiply(x_vals,y_vals)[0] > np.multiply(x_vals,y_vals)[-1]
-        )
-        line_end = float(
-            np.multiply(x_vals,y_vals)[0] < np.multiply(x_vals,y_vals)[-1]
-        )
         plt.plot(
-            np.concatenate(([line_start],x_vals,[line_end])), 
-            np.concatenate(([line_start],y_vals,[line_end])), 
+            np.concatenate(([1.],x_vals,[0.])), 
+            np.concatenate(([1.],y_vals,[0.])), 
             marker='None', c=mod_setting_dicts[m]['color'], 
             mew=2., mec='white', figure=fig, ms=0, 
             ls=mod_setting_dicts[m]['linestyle'], 
@@ -729,7 +662,7 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         for i, item in enumerate(x_vals):
             plt.scatter(
                 x_vals[i], y_vals[i], marker=thresh_markers[i][0], 
-                c=mod_setting_dicts[m]['color'], linewidths=2., 
+                c=mod_setting_dicts[m]['color'], linewidths=1.5, 
                 edgecolors='white', figure=fig, s=thresh_markers[i][1]**2,
                 zorder=10
             )
@@ -774,10 +707,8 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
     )
     var_long_name_key = df['FCST_VAR'].tolist()[0]
     if str(var_long_name_key).upper() == 'HGT':
-        if str(df['OBS_VAR'].tolist()[0]).upper() in ['CEILING']:
+        if str(df['OBS_VAR'].tolist()[0]).upper() == 'CEILING':
             var_long_name_key = 'HGTCLDCEIL'
-        elif str(df['OBS_VAR'].tolist()[0]).upper() in ['HPBL']:
-            var_long_name_key = 'HPBL'
     var_long_name = variable_translator[var_long_name_key]
     metrics_using_var_units = [
         'BCRMSE','RMSE','BIAS','ME','FBAR','OBAR','MAE','FBAR_OBAR',
@@ -799,35 +730,16 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
     )
 
     ax.legend(
-        handles, labels, loc='upper center', fontsize=15, framealpha=1, 
-        bbox_to_anchor=(0.5, -0.08), ncol=4, frameon=True, numpoints=1, 
-        borderpad=.8, labelspacing=2., columnspacing=3., handlelength=3., 
-        handletextpad=.4, borderaxespad=.5) 
+        handles, labels, framealpha=1, 
+        bbox_to_anchor=(0.5, -0.15), ncol=4, frameon=True, numpoints=1, 
+        borderpad=.8, labelspacing=1. 
+    ) 
     ax.grid(
-        b=True, which='major', axis='both', alpha=.35, linestyle='--', 
+        visible=True, which='major', axis='both', alpha=.35, linestyle='--', 
         linewidth=.5, c='black', zorder=0
     )
     
-    fig.subplots_adjust(bottom=.2, right=.77, left=.23, wspace=0, hspace=0)
-    '''
-    cax = fig.add_axes([.775, .2, .01, .725])
-    cbar_ticks = [0.,.1,.2,.3,.4,.5,.6,.7,.8,.9,1.]
-    cb = plt.colorbar(
-        csi_contour, orientation='vertical', cax=cax, ticks=cbar_ticks,
-        spacing='uniform', drawedges=True
-    )
-    cb.dividers.set_color('black')
-    cb.dividers.set_linewidth(2)
-    cb.ax.tick_params(
-        labelsize=8, labelright=True, labelleft=False, right=False
-    )
-    cb.ax.set_yticklabels(
-        [f'{cbar_tick:.1f}' for cbar_tick in cbar_ticks], 
-        fontdict={'fontsize': 12}
-    )
-    cax.hlines([0, 1], 0, 1, colors='black', linewidth=4)
-    cb.set_label(f'{metric_long_names[2]}')
-    '''
+    fig.subplots_adjust(wspace=0, hspace=0)
 
     # Title
     domain = df['VX_MASK'].tolist()[0]
@@ -840,48 +752,18 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         [f'{date_hour:02d}' for date_hour in date_hours],
         ', ', '', 'Z', 'and ', ''
     )
-    '''
-    date_hours_string = ' '.join([
-        f'{date_hour:02d}Z,' for date_hour in date_hours
-    ])
-    '''
     date_start_string = date_range[0].strftime('%d %b %Y')
     date_end_string = date_range[1].strftime('%d %b %Y')
-    if str(level).upper() in ['CEILING', 'TOTAL', 'PBL']:
-        if str(level).upper() == 'CEILING':
-            level_string = ''
-            level_savename = ''
-        elif str(level).upper() == 'TOTAL':
-            level_string = 'Total '
-            level_savename = ''
-        elif str(level).upper() == 'PBL':
-            level_string = ''
-            level_savename = ''
-    elif str(verif_type).lower() in ['pres', 'upper_air', 'raob'] or 'P' in str(level):
-        if 'P' in str(level):
-            if str(level).upper() == 'P90-0':
-                level_string = f'Mixed-Layer '
-                level_savename = f'ML'
-            else:
-                level_num = level.replace('P', '')
-                level_string = f'{level_num} hPa '
-                level_savename = f'{level_num}MB_'
-        elif str(level).upper() == 'L0':
-            level_string = f'Surface-Based '
-            level_savename = f'SB'
-        else:
-            level_string = ''
-            level_savename = ''
+    if str(verif_type).lower() in ['pres', 'upper_air'] or 'P' in str(level):
+        level_num = level.replace('P', '')
+        level_string = f'{level_num} hPa '
+        level_savename = f'{level_num}MB_'
     elif (str(verif_type).lower() 
-            in ['sfc', 'conus_sfc', 'polar_sfc', 'mrms', 'metar']):
+            in ['sfc', 'conus_sfc', 'polar_sfc', 'mrms']):
         if 'Z' in str(level):
             if str(level).upper() == 'Z0':
-                if str(var_long_name_key).upper() in ['MLSP', 'MSLET', 'MSLMA', 'PRMSL']:
-                    level_string = ''
-                    level_savename = ''
-                else:
-                    level_string = 'Surface '
-                    level_savename = 'SFC_'
+                level_string = 'Surface '
+                level_savename = 'SFC_'
             else:
                 level_num = level.replace('Z', '')
                 if var_savename in ['TSOIL', 'SOILW']:
@@ -916,8 +798,6 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
     ])
     thresholds_string = f'Forecast Thresholds {thresholds_phrase}'
     title1 = f'ROC Curve'
-    if interp_pts and '' not in interp_pts:
-        title1+=f' {interp_pts_string}'
     if not units:
         title2 = (f'{level_string}{var_long_name} (unitless), {domain_string}')
     else:
@@ -925,42 +805,8 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
     title3 = (f'{str(date_type).capitalize()} {date_hours_string} '
               + f'{date_start_string} to {date_end_string}, {frange_string}')
     title_center = '\n'.join([title1, title2, title3])
-    ax.set_title(title_center, loc=plotter.title_loc) 
+    ax.set_title(title_center) 
     logger.info("... Plotting complete.")
-
-    # Logos
-    if plot_logo_left:
-        if os.path.exists(path_logo_left):
-            left_logo_arr = mpimg.imread(path_logo_left)
-            left_image_box = OffsetImage(left_logo_arr, zoom=zoom_logo_left*0.8)
-            ab_left = AnnotationBbox(
-                left_image_box, xy=(0.,1.), xycoords='axes fraction',
-                xybox=(0+xoffset_logo_left, 3+yoffset_logo_left), 
-                boxcoords='offset points', frameon = False,
-                box_alignment=(0,0)
-            )
-            ax.add_artist(ab_left)
-        else:
-            logger.warning(
-                f"Left logo path ({path_logo_left}) doesn't exist. "
-                + f"Left logo will not be plotted."
-            )
-    if plot_logo_right:
-        if os.path.exists(path_logo_right):
-            right_logo_arr = mpimg.imread(path_logo_right)
-            right_image_box = OffsetImage(right_logo_arr, zoom=zoom_logo_right*0.8)
-            ab_right = AnnotationBbox(
-                right_image_box, xy=(1.,1.), xycoords='axes fraction',
-                xybox=(0+xoffset_logo_right, 3+yoffset_logo_right), 
-                boxcoords='offset points', frameon = False,
-                box_alignment=(1,0)
-            )
-            ax.add_artist(ab_right)
-        else:
-            logger.warning(
-                f"Right logo path ({path_logo_right}) doesn't exist. "
-                + f"Right logo will not be plotted."
-            )
 
     # Saving
     models_savename = '_'.join([str(model) for model in model_list])
@@ -983,11 +829,9 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
                  + f'{str(domain).lower()}_{str(date_type).lower()}_'
                  + f'{str(date_hours_savename).lower()}_'
                  + f'{str(level_savename).lower()}'
-                 + f'{str(var_savename).lower()}')
-    if interp_pts and '' not in interp_pts:
-        save_name+=f'_{str(interp_pts_save_string).lower()}'
-    save_name+=f'_{str(frange_save_string).lower()}'
-    save_name+=f'_{str(thresholds_save_phrase).lower()}')
+                 + f'{str(var_savename).lower()}_'
+                 + f'{str(frange_save_string).lower()}_'
+                 + f'{str(thresholds_save_phrase).lower()}')
     if save_header:
         save_name = f'{save_header}_'+save_name
     save_subdir = os.path.join(
@@ -998,6 +842,16 @@ def plot_performance_diagram(df: pd.DataFrame, logger: logging.Logger,
         os.makedirs(save_subdir)
     save_path = os.path.join(save_subdir, save_name+'.png')
     fig.savefig(save_path, dpi=dpi)
+    if restart_dir:
+        shutil.copy2(
+            save_path, 
+            os.path.join(
+                restart_dir, 
+                f'{str(plot_group).lower()}', 
+                f'{str(time_period_savename).lower()}', 
+                save_name+'.png'
+            )
+        )
     logger.info(u"\u2713"+f" plot saved successfully as {save_path}")
     plt.close(num)
     logger.info('========================================')
@@ -1046,7 +900,7 @@ def main():
         date_hours = INIT_HOURS
         date_type_string = 'Initialization'
     else:
-        e = (f"Invalid DATE_TYPE: {str(date_type).upper()}. Valid values are"
+        e = (f"FATAL ERROR: Invalid DATE_TYPE: {str(date_type).upper()}. Valid values are"
              + f" VALID or INIT")
         logger.error(e)
         raise ValueError(e)
@@ -1060,6 +914,7 @@ def main():
     logger.debug(f"STATS_DIR: {STATS_DIR}")
     logger.debug(f"PRUNE_DIR: {PRUNE_DIR}")
     logger.debug(f"SAVE_DIR: {SAVE_DIR}")
+    logger.debug(f"RESTART_DIR: {RESTART_DIR}")
     logger.debug(f"VERIF_CASETYPE: {VERIF_CASETYPE}")
     logger.debug(f"MODELS: {MODELS}")
     logger.debug(f"VARIABLES: {VARIABLES}")
@@ -1089,7 +944,6 @@ def main():
     logger.debug(f"LINE_TYPE: {LINE_TYPE}")
     logger.debug(f"METRICS: {METRICS}")
     logger.debug(f"CONFIDENCE_INTERVALS: {CONFIDENCE_INTERVALS}")
-    logger.debug(f"INTERP_PNTS: {INTERP_PNTS if INTERP_PNTS else 'No interpolation points'}")
 
     logger.debug('----------------------------------------')
     logger.debug(f"Advanced settings (configurable in {SETTINGS_DIR}/settings.py)")
@@ -1102,18 +956,6 @@ def main():
     logger.debug(f"Display averages? {'yes' if display_averages else 'no'}")
     logger.debug(
         f"Clear prune directories? {'yes' if clear_prune_dir else 'no'}"
-    )
-    logger.debug(f"Plot upper-left logo? {'yes' if plot_logo_left else 'no'}")
-    logger.debug(
-        f"Plot upper-right logo? {'yes' if plot_logo_right else 'no'}"
-    )
-    logger.debug(f"Upper-left logo path: {path_logo_left}")
-    logger.debug(f"Upper-right logo path: {path_logo_right}")
-    logger.debug(
-        f"Upper-left logo fraction of original size: {zoom_logo_left}"
-    )
-    logger.debug(
-        f"Upper-right logo fraction of original size: {zoom_logo_right}"
     )
     if CONFIDENCE_INTERVALS:
         logger.debug(f"Confidence Level: {int(ci_lev*100)}%")
@@ -1138,11 +980,11 @@ def main():
     num=0
     e = ''
     if str(VERIF_CASETYPE).lower() not in list(reference.case_type.keys()):
-        e = (f"The requested verification case/type combination is not valid:"
+        e = (f"FATAL ERROR: The requested verification case/type combination is not valid:"
              + f" {VERIF_CASETYPE}")
     elif str(LINE_TYPE).upper() not in list(
             reference.case_type[str(VERIF_CASETYPE).lower()].keys()):
-        e = (f"The requested line_type is not valid for {VERIF_CASETYPE}:"
+        e = (f"FATAL ERROR: The requested line_type is not valid for {VERIF_CASETYPE}:"
              + f" {LINE_TYPE}")
     else:
         case_specs = (
@@ -1156,7 +998,7 @@ def main():
         raise ValueError(e+"\nQuitting ...")
     if (str(INTERP).upper()
            not in case_specs['interp'].replace(' ','').split(',')):
-        e = (f"The requested interp method is not valid for the"
+        e = (f"FATAL ERROR: The requested interp method is not valid for the"
              + f" requested case type ({VERIF_CASETYPE}) and"
              + f" line_type ({LINE_TYPE}): {INTERP}")
         logger.error(e)
@@ -1166,7 +1008,7 @@ def main():
         if (str(metric).lower()
                 not in case_specs['plot_stats_list']
                 .replace(' ','').split(',')):
-            e = (f"The requested metric is not valid for the"
+            e = (f"FATAL ERROR: The requested metric is not valid for the"
                  + f" requested case type ({VERIF_CASETYPE}) and"
                  + f" line_type ({LINE_TYPE}): {metric}")
             logger.error(e)
@@ -1212,15 +1054,23 @@ def main():
             logger.warning(e)
             logger.warning("Continuing ...")
         plot_group = var_specs['plot_group']
-        for l, fcst_level in enumerate(FCST_LEVELS):
-            if len(FCST_LEVELS) != len(OBS_LEVELS):
-                e = ("FCST_LEVELS and OBS_LEVELS must be lists of the same"
+        if FCST_LEVELS in presets.level_presets:
+            fcst_levels = re.split(r',(?![0*])', presets.level_presets[FCST_LEVELS].replace(' ',''))
+        else:
+            fcst_levels = re.split(r',(?![0*])', FCST_LEVELS.replace(' ',''))
+        if OBS_LEVELS in presets.level_presets:
+            obs_levels = re.split(r',(?![0*])', presets.level_presets[OBS_LEVELS].replace(' ',''))
+        else:
+            obs_levels = re.split(r',(?![0*])', OBS_LEVELS.replace(' ',''))
+        for l, fcst_level in enumerate(fcst_levels):
+            if len(fcst_levels) != len(obs_levels):
+                e = ("FATAL ERROR: FCST_LEVELS and OBS_LEVELS must be lists of the same"
                      + f" size")
                 logger.error(e)
                 logger.error("Quitting ...")
                 raise ValueError(e+"\nQuitting ...")
-            if (FCST_LEVELS[l] not in var_specs['fcst_var_levels'] 
-                    or OBS_LEVELS[l] not in var_specs['obs_var_levels']):
+            if (fcst_levels[l] not in var_specs['fcst_var_levels'] 
+                    or obs_levels[l] not in var_specs['obs_var_levels']):
                 e = (f"The requested variable/level combination is not valid:"
                      + f" {requested_var}/{level}")
                 logger.warning(e)
@@ -1238,7 +1088,7 @@ def main():
                     logger, STATS_DIR, PRUNE_DIR, OUTPUT_BASE_TEMPLATE, VERIF_CASE, 
                     VERIF_TYPE, LINE_TYPE, DATE_TYPE, date_range, EVAL_PERIOD, 
                     date_hours, FLEADS, requested_var, fcst_var_names, 
-                    obs_var_names, MODELS, domain, INTERP, MET_VERSION, 
+                    obs_var_names, MODELS, domain, INTERP, [''], MET_VERSION, 
                     clear_prune_dir
                 )
                 if df is None:
@@ -1260,23 +1110,14 @@ def main():
                     metric1_name=metrics[0], metric2_name=metrics[1],
                     date_type=DATE_TYPE,  verif_type=VERIF_TYPE, 
                     line_type=LINE_TYPE, date_hours=date_hours, 
-                    save_dir=SAVE_DIR, eval_period=EVAL_PERIOD, 
+                    save_dir=SAVE_DIR, restart_dir=RESTART_DIR, 
+                    eval_period=EVAL_PERIOD, 
                     display_averages=display_averages, save_header=URL_HEADER,
                     plot_group=plot_group, 
-                    confidence_intervals=CONFIDENCE_INTERVALS, interp_pts=INTERP_PNTS,
+                    confidence_intervals=CONFIDENCE_INTERVALS, 
                     bs_nrep=bs_nrep, bs_method=bs_method, ci_lev=ci_lev, 
                     bs_min_samp=bs_min_samp,
-                    sample_equalization=sample_equalization,
-                    plot_logo_left=plot_logo_left,
-                    plot_logo_right=plot_logo_right,
-                    path_logo_left=path_logo_left,
-                    path_logo_right=path_logo_right,
-                    zoom_logo_left=zoom_logo_left,
-                    zoom_logo_right=zoom_logo_right,
-                    xoffset_logo_left=xoffset_logo_left,
-                    yoffset_logo_left=yoffset_logo_left,
-                    xoffset_logo_right=xoffset_logo_right,
-                    yoffset_logo_right=yoffset_logo_right,
+                    sample_equalization=sample_equalization
                 )
                 num+=1
 
@@ -1295,6 +1136,10 @@ if __name__ == "__main__":
     STATS_DIR = OUTPUT_BASE_DIR
     PRUNE_DIR = check_PRUNE_DIR(os.environ['PRUNE_DIR'])
     SAVE_DIR = check_SAVE_DIR(os.environ['SAVE_DIR'])
+    if 'RESTART_DIR' in os.environ:
+        RESTART_DIR = check_RESTART_DIR(os.environ['RESTART_DIR'])
+    else:
+        RESTART_DIR = ''
     DATE_TYPE = check_DATE_TYPE(os.environ['DATE_TYPE'])
     LINE_TYPE = check_LINE_TYPE(os.environ['LINE_TYPE'])
     INTERP = check_INTERP(os.environ['INTERP'])
@@ -1323,8 +1168,8 @@ if __name__ == "__main__":
     FLEADS = check_FCST_LEAD(os.environ['FCST_LEAD']).replace(' ','').split(',')
 
     # list of levels
-    FCST_LEVELS = re.split(r',(?![0*])', check_FCST_LEVEL(os.environ['FCST_LEVEL']).replace(' ',''))
-    OBS_LEVELS = re.split(r',(?![0*])', check_OBS_LEVEL(os.environ['OBS_LEVEL']).replace(' ',''))
+    FCST_LEVELS = check_FCST_LEVEL(os.environ['FCST_LEVEL'])
+    OBS_LEVELS = check_OBS_LEVEL(os.environ['OBS_LEVEL'])
 
     FCST_THRESH = check_FCST_THRESH(os.environ['FCST_THRESH'], LINE_TYPE)
     OBS_THRESH = check_OBS_THRESH(os.environ['OBS_THRESH'], FCST_THRESH, LINE_TYPE).replace(' ','').split(',')
@@ -1350,9 +1195,6 @@ if __name__ == "__main__":
     ci_lev = toggle.plot_settings['ci_lev']
     bs_min_samp = toggle.plot_settings['bs_min_samp']
 
-    # list of points used in interpolation method
-    INTERP_PNTS = check_INTERP_PTS(os.environ['INTERP_PNTS']).replace(' ','').split(',')
-
     # At each value of the independent variable, whether or not to remove
     # samples used to aggregate each statistic if the samples are not shared
     # by all models.  Required to display sample sizes
@@ -1363,18 +1205,6 @@ if __name__ == "__main__":
 
     # Whether or not to clear the intermediate directory that stores pruned data
     clear_prune_dir = toggle.plot_settings['clear_prune_directory']
-
-    # Information about logos
-    plot_logo_left = toggle.plot_settings['plot_logo_left']
-    plot_logo_right = toggle.plot_settings['plot_logo_right']
-    zoom_logo_left = toggle.plot_settings['zoom_logo_left']
-    zoom_logo_right = toggle.plot_settings['zoom_logo_right']
-    xoffset_logo_left = toggle.plot_settings['xoffset_logo_left']
-    yoffset_logo_left = toggle.plot_settings['yoffset_logo_left']
-    xoffset_logo_right = toggle.plot_settings['xoffset_logo_right']
-    yoffset_logo_right = toggle.plot_settings['yoffset_logo_right']
-    path_logo_left = paths.logo_left_path
-    path_logo_right = paths.logo_right_path
 
     OUTPUT_BASE_TEMPLATE = templates.output_base_template
 
@@ -1391,10 +1221,7 @@ if __name__ == "__main__":
         int(init_hour) if init_hour else None for init_hour in INIT_HOURS
     ]
     FLEADS = [int(flead) for flead in FLEADS]
-    INTERP_PNTS = [str(pts) for pts in INTERP_PNTS]
     VERIF_CASETYPE = str(VERIF_CASE).lower() + '_' + str(VERIF_TYPE).lower()
-    FCST_LEVELS = [str(level) for level in FCST_LEVELS]
-    OBS_LEVELS = [str(level) for level in OBS_LEVELS]
     CONFIDENCE_INTERVALS = str(CONFIDENCE_INTERVALS).lower() in [
         'true', '1', 't', 'y', 'yes'
     ]
